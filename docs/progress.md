@@ -11,7 +11,7 @@
 
 > 항상 한 줄. 재개하는 세션이 가장 먼저 읽는 줄이다.
 
-T7 진행 중 — Shadow DOM 패널 렌더. T0~T6 완료, 단위 테스트 91개 통과.
+T8 진행 중 — 목록 페이지 툴바·담기 버튼. T0~T7 완료, 단위 테스트 91개 통과.
 
 ## 조사 중인 문제
 
@@ -76,7 +76,7 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | T4 | `chzzk-api.js` 호출·정규화 | `[x]` | | 테스트 14개 통과 (누적 67) |
 | T5 | `store.js` 저장소 접근 | `[x]` | | 테스트 16개 통과 (누적 83) |
 | T6 | `manifest.json` + `boot.js` 주입 골격 | `[x]` | | route 테스트 8개, 하니스로 pageType videos/watch 판정 확인 |
-| T7 | Shadow DOM 패널 렌더 | `[ ]` | | |
+| T7 | Shadow DOM 패널 렌더 | `[x]` | | probe-panel로 렌더·순서변경·새로고침 복원·XSS 이스케이프 확인 |
 | T8 | 목록 페이지 툴바·담기 버튼 | `[ ]` | | |
 | T9 | 진행 저장·이어보기 복원 | `[ ]` | | |
 | T10 | 종료 감지·다음 항목 전환 | `[ ]` | | |
@@ -153,6 +153,7 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | 플레이어 앵커 | `.pzp` (prismplayer 루트, relative). `<video>` 바로 위는 `.webplayer-internal-source-wrapper` | 2026-09-15 |
 | 클래스명 | **해시 포함** (`_thumbnail_1xtdq_10`) → 셀렉터로 쓰지 말 것 | 2026-09-15 |
 | seek | `currentTime` 쓰기 동작 확인 (1.483 → 62.292) | 2026-09-15 |
+| 관찰 | 영상 페이지에서 `PAGEERROR: q` 가 뜬다. 한 글자 minified 예외라 치지직 자체 번들의 것으로 본다. 우리 코드는 minify 안 하므로 메시지가 읽힌다. 기능 영향 없음 | 2026-09-15 |
 
 ---
 
