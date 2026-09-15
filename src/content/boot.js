@@ -1,4 +1,5 @@
-import { detectPageType } from './route.js';
+import { detectPageType, parseChannelId } from './route.js';
+import { attachVideosPage } from './videos-page.js';
 import { createStore } from '../common/store.js';
 import { mountPanel } from '../panel/panel.js';
 import {
@@ -89,7 +90,21 @@ async function attachFor(pageType) {
     detachCurrent();
     detachCurrent = null;
   }
-  // 페이지별 모듈은 T8·T9에서 붙인다.
+
+  if (pageType === 'videos') {
+    const channelId = parseChannelId(location.pathname);
+    if (channelId) {
+      detachCurrent = attachVideosPage({
+        channelId,
+        getQueue: () => queue,
+        commit,
+        setStatus,
+        openPanel: () => setPanelOpen(true)
+      });
+    }
+  }
+  // 영상 페이지 모듈은 T9에서 붙인다.
+
   publishDebugState(pageType);
 }
 

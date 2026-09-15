@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { normalizeVideo, buildVideosUrl, fetchAllReplays, ApiError } from '../src/common/chzzk-api.js';
+import {
+  normalizeVideo, buildVideosUrl, buildVideoUrl, fetchAllReplays, fetchVideo, ApiError
+} from '../src/common/chzzk-api.js';
 
 const page0 = JSON.parse(readFileSync(new URL('./fixtures/videos-page0.json', import.meta.url), 'utf8'));
 const CH = '0f9a3b4fbb0e7137d1f0b4d70563031c';
@@ -176,4 +178,48 @@ test('fetchAllReplays: totalPages가 1이면 추가 요청을 하지 않는다',
   };
   await fetchAllReplays(CH, { fetchImpl: impl });
   assert.equal(calls, 1);
+});
+
+test('buildVideoUrl: 단일 영상 경로', () => {
+  const u = new URL(buildVideoUrl(15204257));
+  assert.equal(u.hostname, 'api.chzzk.naver.com');
+  assert.equal(u.pathname, '/service/v2/videos/15204257');
+});
+
+// 단일 영상 응답은 목록 항목과 스키마가 같다. 실측으로 확인했다.
+const singleBody = {
+  code: 200,
+  content: {
+    videoNo: 15204257,
+    videoTitle: '오늘 잠을 히익',
+    videoType: 'REPLAY',
+    publishDate: '2026-09-15 08:08:00',
+    duration: 42675,
+    thumbnailImageUrl: 'https://livecloud-thumb.akamaized.net/c.jpg',
+    channel: { channelId: CH, channelName: '오킹TV' }
+  }
+};
+
+test('fetchVideo: 단일 영상을 내부 모델로 돌려준다', async () => {
+  const it = await fetchVideo(15204257, { fetchImpl: async () => ok(singleBody) });
+  assert.equal(it.videoNo, 15204257);
+  // DOM 스크래핑이면 접근성 텍스트가 섞여 들어온다. API는 제목만 준다.
+  assert.equal(it.title, '오늘 잠을 히익');
+  assert.equal(it.publishedAt, '2026-09-15 08:08:00');
+  assert.equal(it.duration, 42675);
+  assert.equal(it.channelName, '오킹TV');
+});
+
+test('fetchVideo: 요청 실패는 ApiError', async () => {
+  await assert.rejects(
+    () => fetchVideo(1, { fetchImpl: async () => fail(404) }),
+    (e) => e instanceof ApiError && e.status === 404
+  );
+});
+
+test('fetchVideo: 응답이 정규화되지 않으면 ApiError', async () => {
+  await assert.rejects(
+    () => fetchVideo(1, { fetchImpl: async () => ok({ code: 200, content: { videoNo: 1 } }) }),
+    ApiError
+  );
 });

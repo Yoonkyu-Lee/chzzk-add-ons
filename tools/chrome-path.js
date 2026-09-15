@@ -43,6 +43,24 @@ export function extensionArgs(extPath) {
     `--disable-extensions-except=${extPath}`,
     `--load-extension=${extPath}`,
     '--no-first-run',
-    '--no-default-browser-check'
+    '--no-default-browser-check',
+    // 목록 페이지도 DRM 플레이어를 띄운다. 자동재생을 막으면 렌더러 부담이 줄고
+    // 검증이 안정된다. 우리 기능은 명시적 currentTime 조작으로 검증하므로
+    // 자동재생에 의존하지 않는다.
+    '--autoplay-policy=user-gesture-required',
+    '--mute-audio'
   ];
 }
+
+// 치지직 목록 페이지에서 카드가 렌더될 때까지 기다린다.
+// domcontentloaded는 SPA 하이드레이션 전이라 너무 이르고,
+// networkidle2는 스트리밍 때문에 영원히 정착하지 않는다 (progress.md P2).
+export const CARD_LINK_SELECTOR = 'a[href*="/video/"]';
+
+export async function gotoAndWaitCards(page, url, { timeout = 60000 } = {}) {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  await page.waitForSelector(CARD_LINK_SELECTOR, { timeout });
+}
+
+// 렌더러가 잠깐 바빠도 CDP 호출이 죽지 않게 넉넉히 준다.
+export const PROTOCOL_TIMEOUT = 120000;

@@ -2,6 +2,7 @@
 // 응답 형태가 바뀌면 여기만 고친다. 밖으로는 정규화된 모델만 나간다.
 
 const API_BASE = 'https://api.chzzk.naver.com/service/v1/channels';
+const VIDEO_BASE = 'https://api.chzzk.naver.com/service/v2/videos';
 const DEFAULT_SIZE = 24;
 const DEFAULT_CONCURRENCY = 3;
 
@@ -27,6 +28,12 @@ export function buildVideosUrl(channelId, page, size = DEFAULT_SIZE) {
   return `${API_BASE}/${channelId}/videos?${q}`;
 }
 
+// 단일 영상 메타데이터. 응답이 목록 항목과 같은 스키마라 normalizeVideo를
+// 그대로 재사용한다. 실측으로 확인했다.
+export function buildVideoUrl(videoNo) {
+  return `${VIDEO_BASE}/${videoNo}`;
+}
+
 export function normalizeVideo(raw) {
   if (!raw) return null;
   // duration 0은 유효한 값이다 (실측에 24초짜리가 있다).
@@ -46,6 +53,18 @@ export function normalizeVideo(raw) {
     done: false,
     unavailable: false
   };
+}
+
+// 개별 담기에 쓴다. 카드 DOM에서 제목을 긁으면 접근성 텍스트가 섞여 들어오고
+// (실측: "오늘 잠을 히익동영상 엔드로 이동") 날짜와 길이도 얻을 수 없다.
+// API를 쓰면 제목이 깨끗하고 날짜가 있어 순서도 제대로 잡힌다.
+export async function fetchVideo(videoNo, { fetchImpl = globalThis.fetch } = {}) {
+  const res = await fetchImpl(buildVideoUrl(videoNo));
+  if (!res.ok) throw new ApiError(`영상 정보 요청 실패 (${videoNo})`, { status: res.status });
+  const body = await res.json();
+  const item = normalizeVideo(body?.content);
+  if (!item) throw new ApiError(`영상 정보를 읽지 못했습니다 (${videoNo})`);
+  return item;
 }
 
 async function getPage(fetchImpl, channelId, page, size) {

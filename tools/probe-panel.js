@@ -1,4 +1,4 @@
-// T7 확인용: 큐를 심고 패널이 그려지는지, 순서 변경이 저장되는지 본다.
+﻿// T7 확인용: 큐를 심고 패널이 그려지는지, 순서 변경이 저장되는지 본다.
 // T11에서 하니스가 이 역할을 흡수한다.
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,13 +44,13 @@ try {
 
   // 확장이 뜨도록 한 번 방문해 service worker를 깨운다.
   await page.goto(`https://chzzk.naver.com/${CHANNEL}/videos?videoType=REPLAY`, {
-    waitUntil: 'networkidle2', timeout: 45000
+    waitUntil: 'domcontentloaded', timeout: 45000
   });
   await clearStorage(browser);
   await writeQueue(browser, seedQueue(ITEMS, 0));
   await setPanelOpen(browser, true);
 
-  await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
   out.debug = await waitFor(async () => {
     const d = await debugState(page);
     return d && d.queueLength === 4 ? d : null;
@@ -81,7 +81,7 @@ try {
   };
 
   // 새로고침 후 복원되는지 본다.
-  await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
   out.afterReload = await waitFor(async () => {
     const p = await panelInfo(page);
     return p.rowCount === 4 ? p : null;

@@ -11,7 +11,7 @@
 
 > 항상 한 줄. 재개하는 세션이 가장 먼저 읽는 줄이다.
 
-T8 진행 중 — 목록 페이지 툴바·담기 버튼. T0~T7 완료, 단위 테스트 91개 통과.
+T9 진행 중 — 진행 저장·이어보기 복원. T0~T8 완료, 단위 테스트 95개 통과.
 
 ## 조사 중인 문제
 
@@ -20,6 +20,54 @@ T8 진행 중 — 목록 페이지 툴바·담기 버튼. T0~T7 완료, 단위 �
 > 알게 된 사실은 스펙이나 아래 "환경 사실"로 옮긴다.
 
 없음
+
+### 해결된 문제 기록 2
+
+#### P2 — 목록 페이지에 툴바가 붙지 않고 렌더러가 멈춘다 → **해결 (2026-09-15)**
+
+**증상**
+`tools/probe-videos.js`가 `#chzzk-addons-toolbar`를 20초 기다려도 못 찾는다.
+진단(`tools/diag.js`)에서:
+
+- `panelHost: true`, `styleTag: true` → **확장은 정상 주입되고
+  `attachVideosPage`도 실행됐다.** 스타일 태그는 그 함수가 넣는다.
+- `videoLinks: 0` (t+2s, t+4s) → 카드가 아직 렌더되지 않았다.
+- 그 직후 `ProtocolError: Runtime.callFunctionOn timed out` → **렌더러가 멈췄다.**
+- 콘솔에 PlayReady DRM 경고가 9회 반복 → 목록 페이지도 플레이어를 띄운다.
+
+**원인 판단 두 가지**
+
+1. 네비게이션 대기 방식. `networkidle2`는 스트리밍 때문에 **영원히 안 정착**해
+   45초 타임아웃이 났고, `domcontentloaded`는 **너무 이르다**(SPA 하이드레이션 전).
+   → `domcontentloaded` + `waitForSelector('a[href*="/video/"]')`로 간다.
+2. **우리 MutationObserver가 렌더러를 멈춘 것으로 본다.**
+   `mo.observe(document.body, {childList:true, subtree:true})`의 콜백이
+   매 변경마다 `querySelectorAll`과 `getComputedStyle`을 돈다.
+   치지직 플레이어가 끊임없이 DOM을 건드리므로 이 콜백이 폭주한다.
+   `getComputedStyle`은 레이아웃을 강제해 비용이 크다.
+   → 콜백을 디바운스하고, 관련 없는 변경에는 일하지 않게 한다.
+
+두 번째는 하니스 문제가 아니라 **제품 결함**이다. 실제 사용자 브라우저에서도
+목록 페이지가 느려진다.
+
+**시도한 것**
+
+| # | 접근 | 결과 |
+|---|------|------|
+| 1 | `networkidle2`로 대기 | 실패 — 45초 타임아웃, 정착하지 않음 |
+| 2 | `domcontentloaded`로 대기 | 실패 — 너무 이름, 4초에도 링크 0개 |
+| 3 | 진단으로 원인 분리 | 성공 — 주입은 정상, 카드 미렌더 + 렌더러 정지 확인 |
+| 4 | MutationObserver 250ms 디바운스 + 우리 요소 변경 무시 | **성공** |
+| 5 | `gotoAndWaitCards` (domcontentloaded + waitForSelector) + `protocolTimeout` 120s | **성공** |
+
+**확인된 결과**
+툴바 주입, 링크 36개 → 버튼 18개(중복 제거), 전체 담기 65개 `ascending: true`,
+같은 날 조각 시각순 (09-13 01:33 → 14:15 → 15:31).
+
+**남은 교훈**
+디바운스 없는 MutationObserver는 제품 결함이었다. 하니스가 아니라 실제
+사용자 브라우저에서도 목록 페이지를 느리게 만든다. 치지직은 목록 페이지에서도
+DRM 플레이어를 띄워 DOM 변경이 끊이지 않는다.
 
 ### 해결된 문제 기록
 
@@ -77,7 +125,7 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | T5 | `store.js` 저장소 접근 | `[x]` | | 테스트 16개 통과 (누적 83) |
 | T6 | `manifest.json` + `boot.js` 주입 골격 | `[x]` | | route 테스트 8개, 하니스로 pageType videos/watch 판정 확인 |
 | T7 | Shadow DOM 패널 렌더 | `[x]` | | probe-panel로 렌더·순서변경·새로고침 복원·XSS 이스케이프 확인 |
-| T8 | 목록 페이지 툴바·담기 버튼 | `[ ]` | | |
+| T8 | 목록 페이지 툴바·담기 버튼 | `[x]` | | P2 해결. 전체 담기 65개 오래된 순 확인 |
 | T9 | 진행 저장·이어보기 복원 | `[ ]` | | |
 | T10 | 종료 감지·다음 항목 전환 | `[ ]` | | |
 | T11 | 검증 하니스 완성 | `[ ]` | | |
@@ -152,6 +200,8 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | 목록 컨테이너 | 카드의 `parentElement` (`ul._list_*`). 툴바는 그 앞에 꽂음 | 2026-09-15 |
 | 플레이어 앵커 | `.pzp` (prismplayer 루트, relative). `<video>` 바로 위는 `.webplayer-internal-source-wrapper` | 2026-09-15 |
 | 클래스명 | **해시 포함** (`_thumbnail_1xtdq_10`) → 셀렉터로 쓰지 말 것 | 2026-09-15 |
+| 단일 영상 API | `GET api.chzzk.naver.com/service/v2/videos/{videoNo}` — 인증 없이 200, 목록 항목과 **같은 스키마**. 개별 담기에 사용 | 2026-09-15 |
+| 목록 페이지 대기 | `networkidle2`는 정착 안 함, `domcontentloaded`는 너무 이름 → `gotoAndWaitCards` 사용 | 2026-09-15 |
 | seek | `currentTime` 쓰기 동작 확인 (1.483 → 62.292) | 2026-09-15 |
 | 관찰 | 영상 페이지에서 `PAGEERROR: q` 가 뜬다. 한 글자 minified 예외라 치지직 자체 번들의 것으로 본다. 우리 코드는 minify 안 하므로 메시지가 읽힌다. 기능 영향 없음 | 2026-09-15 |
 

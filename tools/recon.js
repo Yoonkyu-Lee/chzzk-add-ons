@@ -1,4 +1,4 @@
-// T0 전용 정찰 도구. 두 가지를 확인한다.
+﻿// T0 전용 정찰 도구. 두 가지를 확인한다.
 //   (1) puppeteer-core로 MV3 확장이 실제로 주입되는가
 //   (2) 다시보기 목록·영상 페이지의 실제 DOM 구조
 // 결과를 stdout과 tools/out/recon.json에 남긴다. 사람이 읽고 스펙에 옮긴다.
@@ -62,7 +62,7 @@ async function main() {
 
     // (1) 확장 주입 확인
     await page.goto(`https://chzzk.naver.com/${CHANNEL}/videos?videoType=REPLAY`, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'domcontentloaded',
       timeout: 45000
     });
     await new Promise((r) => setTimeout(r, 2500));
@@ -110,7 +110,7 @@ async function main() {
 
     // (3) 영상 페이지 구조 + seek 실동작 (스펙 4.3-1)
     await page.goto(`https://chzzk.naver.com/video/${VIDEO_NO}`, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'domcontentloaded',
       timeout: 45000
     });
     await page.waitForSelector('video', { timeout: 30000 }).catch(() => null);
