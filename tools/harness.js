@@ -176,6 +176,44 @@ const listScenarios = [
     }
   },
   {
+    n: 11,
+    name: '목록 API 장애 → 패널이 사용자에게 알린다',
+    async run({ browser, page }) {
+      // 비공식 API 의존이 이 확장의 가장 큰 리스크다. 실패했을 때 조용히
+      // 넘어가지 않고 문구가 보이는지 실제로 차단해 확인한다.
+      await clearStorage(browser);
+      await gotoAndWaitCards(page, VIDEOS_URL);
+      await page.waitForSelector('#chzzk-addons-toolbar [data-act="add-all"]', { timeout: 30000 });
+
+      await page.setRequestInterception(true);
+      const blocker = (req) => {
+        if (req.url().includes('api.chzzk.naver.com') && req.url().includes('/videos')) {
+          req.abort('failed').catch(() => {});
+        } else {
+          req.continue().catch(() => {});
+        }
+      };
+      page.on('request', blocker);
+      try {
+        await page.click('#chzzk-addons-toolbar [data-act="add-all"]');
+        const p = await waitFor(async () => {
+          const cur = await panelInfo(page);
+          return cur.status?.includes('가져오지 못했습니다') ? cur : null;
+        }, { label: 'API 실패 문구', timeout: 60000 });
+        const q = await readQueue(browser);
+        assert((q?.items?.length ?? 0) === 0, '실패했는데 큐에 항목이 들어갔다');
+        // 버튼이 다시 눌릴 수 있는 상태로 돌아와야 한다.
+        const label = await page.$eval('#chzzk-addons-toolbar [data-act="add-all"]',
+          (b) => ({ text: b.textContent, disabled: b.disabled }));
+        assert(!label.disabled, '버튼이 비활성 상태로 남았다');
+        return { status: p.status, button: label };
+      } finally {
+        page.off('request', blocker);
+        await page.setRequestInterception(false).catch(() => {});
+      }
+    }
+  },
+  {
     n: 5,
     name: 'SPA 내부 이동 후 패널 생존 (D1 핵심 가정)',
     async run({ browser, page }) {
