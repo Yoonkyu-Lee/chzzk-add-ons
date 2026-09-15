@@ -1,25 +1,17 @@
-// 목록 페이지에서 무엇이 붙고 무엇이 안 붙는지 시간 순으로 찍는다.
+﻿// 목록 페이지에서 무엇이 붙고 무엇이 안 붙는지 시간 순으로 찍는다.
 // 추측으로 고치지 않기 위한 진단 도구.
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer-core';
-import { resolveChrome, extensionArgs } from './chrome-path.js';
+import { launchHarness } from './chrome-path.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const PROFILE = resolve(HERE, '.profile');
 const CHANNEL = '0f9a3b4fbb0e7137d1f0b4d70563031c';
 
-const chrome = resolveChrome();
-const browser = await puppeteer.launch({
-  executablePath: chrome.path,
-  userDataDir: PROFILE,
-  headless: false,
-  args: extensionArgs(ROOT)
-});
+const { browser, page } = await launchHarness();
 
 try {
-  const page = await browser.newPage();
   // 확장 관련만 걸러내지 않고 전부 찍는다. 놓치는 게 없어야 한다.
   page.on('console', (m) => console.log(`  [console.${m.type()}] ${m.text().slice(0, 300)}`));
   page.on('pageerror', (e) => console.log(`  [pageerror] ${e.message.slice(0, 300)}`));

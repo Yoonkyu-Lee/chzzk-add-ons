@@ -8,6 +8,7 @@
     "test": "node --test \"test/**/*.test.js\"",
     "harness": "node tools/harness.js",
     "recon": "node tools/recon.js",
+    "harness:clean": "node tools/clean.js",
     "setup:browser": "puppeteer-browsers install chrome@stable --path tools/.browser"
   },
   "devDependencies": {

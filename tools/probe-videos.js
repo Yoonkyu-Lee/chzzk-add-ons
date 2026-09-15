@@ -3,8 +3,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
-import puppeteer from 'puppeteer-core';
-import { resolveChrome, extensionArgs, gotoAndWaitCards, PROTOCOL_TIMEOUT } from './chrome-path.js';
+import { launchHarness, gotoAndWaitCards } from './chrome-path.js';
 import { readQueue, clearStorage, debugState, panelInfo, waitFor } from './ext-bridge.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -15,20 +14,10 @@ const CHANNEL = '0f9a3b4fbb0e7137d1f0b4d70563031c';
 const VIDEOS_URL = `https://chzzk.naver.com/${CHANNEL}/videos?videoType=REPLAY`;
 
 mkdirSync(OUT, { recursive: true });
-const chrome = resolveChrome();
-console.log(`브라우저: ${chrome.kind}\n`);
-
-const browser = await puppeteer.launch({
-  executablePath: chrome.path,
-  userDataDir: PROFILE,
-  headless: false,
-  protocolTimeout: PROTOCOL_TIMEOUT,
-  args: extensionArgs(ROOT)
-});
+const { browser, page } = await launchHarness();
 
 const out = {};
 try {
-  const page = await browser.newPage();
   page.on('console', (m) => {
     if (m.text().includes('chzzk-add-ons')) console.log('CONSOLE:', m.text());
   });

@@ -1,10 +1,9 @@
-// T9 확인용: 진행 저장, 이어보기 복원, 큐에 없는 영상 무간섭.
+﻿// T9 확인용: 진행 저장, 이어보기 복원, 큐에 없는 영상 무간섭.
 // T11에서 하니스가 이 역할을 흡수한다.
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
-import puppeteer from 'puppeteer-core';
-import { resolveChrome, extensionArgs, PROTOCOL_TIMEOUT } from './chrome-path.js';
+import { launchHarness } from './chrome-path.js';
 import {
   readQueue, writeQueue, clearStorage, seedQueue, watchState, waitFor
 } from './ext-bridge.js';
@@ -38,20 +37,10 @@ async function videoInfo(page) {
 }
 
 mkdirSync(OUT, { recursive: true });
-const chrome = resolveChrome();
-console.log(`브라우저: ${chrome.kind}\n`);
-
-const browser = await puppeteer.launch({
-  executablePath: chrome.path,
-  userDataDir: PROFILE,
-  headless: false,
-  protocolTimeout: PROTOCOL_TIMEOUT,
-  args: extensionArgs(ROOT)
-});
+const { browser, page } = await launchHarness();
 
 const out = {};
 try {
-  const page = await browser.newPage();
   page.on('console', (m) => {
     if (m.text().includes('chzzk-add-ons')) console.log('CONSOLE:', m.text());
   });
@@ -79,10 +68,14 @@ try {
   }, { label: 'video 훅 부착', timeout: 45000 });
 
   // 재생 위치를 300초로 밀고 재생시켜 timeupdate가 돌게 한다.
+  // evaluate 안에서 이벤트를 무한정 기다리면 CDP 호출이 멈춘다. 타임아웃과 경쟁시킨다.
   await page.evaluate(async () => {
     const v = document.querySelector('video');
     if (v.readyState < 1) {
-      await new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true }));
+      await new Promise((r) => {
+        const t = setTimeout(r, 20000);
+        v.addEventListener('loadedmetadata', () => { clearTimeout(t); r(); }, { once: true });
+      });
     }
     v.muted = true;
     v.currentTime = 300;

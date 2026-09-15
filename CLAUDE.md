@@ -155,6 +155,28 @@ npm run setup:browser   # tools/.browser/ 에 Chrome for Testing 설치
 검증 시나리오는 스펙 9.2절에 번호로 정리돼 있다. 각 시나리오는 통과/실패를
 `docs/progress.md`에 기록한다.
 
+### 브라우저 창 관리 — 사람이 쓰는 PC다
+
+검증은 **headed로만** 된다. 치지직 VOD는 DRM이라 headless에서 재생되지
+않는다 (`readyState`가 0에 머물고 `duration`이 NaN). 그래서 창이 뜬다.
+사람이 그 PC를 쓰고 있으므로 창 수와 수명을 최소로 유지한다.
+
+- **브라우저는 `tools/chrome-path.js`의 `launchHarness()`로만 띄운다.**
+  직접 `puppeteer.launch`를 부르지 않는다. 설정이 갈라지고 정리가 빠진다.
+- `launchHarness`가 보장하는 것:
+  띄우기 전 잔여 브라우저 정리 / `exit`·`SIGINT`·예외·미처리 거부에서 닫기 /
+  **시작 탭 재사용**(`newPage`를 쓰면 탭이 하나 더 열린다).
+- 영상 시나리오는 `tools/watch-session.js`의 `withReadyWatchPage`를 쓴다.
+  세션을 갈아 끼우며 재시도하되 매 시도에서 반드시 닫는다.
+- `--headless`는 영상이 필요 없는 확인에만 쓴다.
+  **headed와 프로필을 공유하면 안 된다** — headless 실행이 프로필의 DRM 상태를
+  망가뜨려 이후 headed 실행도 실패한다. `launchHarness`가 프로필을 분리한다.
+- 남은 창이 보이면 `npm run harness:clean`. 프로필 경로로만 식별하므로
+  사람의 Chrome은 건드리지 않는다.
+- **`evaluate` 안에서 이벤트를 무한정 기다리지 않는다.** DRM이 로드되지 않으면
+  `loadedmetadata`가 영원히 오지 않아 CDP 호출이 `protocolTimeout`까지 멈추고,
+  그동안 창이 떠 있다. 항상 타임아웃과 경쟁시킨다.
+
 ### 하니스 운영 규칙 — 반드시 지킨다
 
 1. **사용자의 Chrome을 절대 건드리지 않는다.**

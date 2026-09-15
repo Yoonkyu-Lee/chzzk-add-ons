@@ -3,8 +3,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
-import puppeteer from 'puppeteer-core';
-import { resolveChrome, extensionArgs } from './chrome-path.js';
+import { launchHarness } from './chrome-path.js';
 import {
   readQueue, writeQueue, setPanelOpen, clearStorage, seedQueue,
   debugState, panelInfo, waitFor
@@ -24,19 +23,10 @@ const ITEMS = [
 ];
 
 mkdirSync(OUT, { recursive: true });
-const chrome = resolveChrome();
-console.log(`브라우저: ${chrome.kind}\n`);
-
-const browser = await puppeteer.launch({
-  executablePath: chrome.path,
-  userDataDir: PROFILE,
-  headless: false,
-  args: extensionArgs(ROOT)
-});
+const { browser, page } = await launchHarness();
 
 const out = {};
 try {
-  const page = await browser.newPage();
   page.on('console', (m) => {
     if (m.text().includes('chzzk-add-ons')) console.log('CONSOLE:', m.text());
   });
