@@ -14,6 +14,11 @@ build/
 .DS_Store
 Thumbs.db
 
+# 검증 하니스 산출물 — 스크린샷/로그는 커밋하지 않는다.
+# 통과 기록은 docs/progress.md의 검증 표에 SHA와 함께 남는다.
+tools/out/
+tools/.profile/
+
 # Logs & env
 *.log
 npm-debug.log*
