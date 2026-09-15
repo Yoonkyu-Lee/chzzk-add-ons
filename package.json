@@ -5,7 +5,7 @@
   "type": "module",
   "description": "치지직 다시보기 재생목록 크롬 확장",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.js\"",
     "harness": "node tools/harness.js",
     "recon": "node tools/recon.js",
     "setup:browser": "puppeteer-browsers install chrome@stable --path tools/.browser"
