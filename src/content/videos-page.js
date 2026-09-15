@@ -177,14 +177,27 @@ export function attachVideosPage({ channelId, getQueue, commit, setStatus, openP
     syncCardButtons();
   }
 
-  if (!mountToolbar()) {
-    setStatus(
-      '다시보기 목록을 찾지 못해 담기 버튼을 넣지 못했습니다. 페이지를 새로고침해 주세요.',
-      'error'
-    );
-  }
+  const mounted = mountToolbar();
   decorateCards();
   refreshCount();
+
+  // 처음 부착에 실패해도 바로 알리지 않는다. document_idle 시점에는 카드가
+  // 아직 렌더되지 않은 것이 정상이고, 아래 MutationObserver가 곧 붙인다.
+  // 즉시 알리면 매 로드마다 헛된 오류 문구가 뜨고, 더 중요한 문구까지
+  // 덮어쓴다 (하니스 시나리오 10에서 실제로 관측).
+  // 유예 시간이 지나도 못 붙었을 때만 알린다.
+  const MOUNT_GRACE_MS = 10000;
+  let graceTimer = null;
+  if (!mounted) {
+    graceTimer = setTimeout(() => {
+      graceTimer = null;
+      if (document.getElementById(TOOLBAR_ID)?.isConnected) return;
+      setStatus(
+        '다시보기 목록을 찾지 못해 담기 버튼을 넣지 못했습니다. 페이지를 새로고침해 주세요.',
+        'error'
+      );
+    }, MOUNT_GRACE_MS);
+  }
 
   // 치지직이 페이지를 더 그리면 새 카드에도 버튼을 붙인다.
   //
@@ -223,6 +236,7 @@ export function attachVideosPage({ channelId, getQueue, commit, setStatus, openP
   return function detach() {
     mo.disconnect();
     if (settleTimer) clearTimeout(settleTimer);
+    if (graceTimer) clearTimeout(graceTimer);
     toolbar.removeEventListener('click', onToolbarClick);
     document.removeEventListener('click', onCardClick, true);
     toolbar.remove();

@@ -163,6 +163,9 @@ export async function start() {
   panel.setOpen(ui.panelOpen);
 
   if (loaded.reset) {
+    // 빈 큐를 실제로 되쓴다. 메모리만 비우면 깨진 값이 storage에 남아
+    // 다음 로드에서도 같은 문구가 반복된다.
+    await store.saveQueue(queue);
     setStatus('저장된 재생목록을 읽을 수 없어 비웠습니다. 다시 담아 주세요.', 'error');
   } else {
     repaint();

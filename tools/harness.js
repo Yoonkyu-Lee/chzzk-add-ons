@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { launchHarness, gotoAndWaitCards } from './chrome-path.js';
 import {
   readQueue, writeQueue, clearStorage, seedQueue, setPanelOpen,
-  debugState, watchState, panelInfo, waitFor
+  debugState, watchState, panelInfo, waitFor, extWorker
 } from './ext-bridge.js';
 import { withReadyWatchPage } from './watch-session.js';
 
@@ -147,6 +147,32 @@ const listScenarios = [
       const q = await readQueue(browser);
       assert(q.items.length === 2, `큐 길이가 달라졌다: ${q.items.length}`);
       return { open: p.open, rowCount: p.rowCount, stat: p.stat, queueLength: q.items.length };
+    }
+  },
+  {
+    n: 10,
+    name: '저장된 큐 버전 불일치 → 패널이 사용자에게 알린다',
+    async run({ browser, page }) {
+      // 스펙 8장의 에러 경로 하나를 실제로 확인한다.
+      // 조용히 비우지 않고 문구를 남기는지가 요점이다.
+      const w = await extWorker(browser);
+      await w.evaluate(async () => {
+        await chrome.storage.local.clear();
+        await chrome.storage.local.set({
+          queue: { version: 99, items: [{ videoNo: 1 }], currentIndex: 0 },
+          ui: { panelOpen: true }
+        });
+      });
+      await gotoAndWaitCards(page, VIDEOS_URL);
+      const p = await waitFor(async () => {
+        const cur = await panelInfo(page);
+        return cur.status ? cur : null;
+      }, { label: '버전 불일치 문구' });
+      assert(p.status.includes('읽을 수 없어'), `예상과 다른 문구: ${p.status}`);
+      assert(p.emptyShown, '큐가 비워지지 않았다');
+      const q = await readQueue(browser);
+      assert(q.items.length === 0, '큐가 초기화되지 않았다');
+      return { status: p.status, emptyShown: p.emptyShown };
     }
   },
   {
@@ -302,6 +328,33 @@ const watchScenarios = [
       );
       assert(step2.ok, `2단계 재생 준비 실패: ${JSON.stringify(step2.tries)}`);
       return { savedProgress: step1.result.saved, restoredAt: step2.result.restored };
+    }
+  },
+  {
+    n: 9,
+    name: '큐에 없는 영상 페이지에서는 아무 동작도 하지 않는다',
+    async run() {
+      // 스펙의 원칙이다. 일반 시청을 방해하지 않아야 한다.
+      // B만 큐에 담고 A를 여는 방식으로 확인한다.
+      const r = await withReadyWatchPage(
+        { videoNo: A.videoNo, seed: seeder([B], 0) },
+        async ({ browser, page }) => {
+          await new Promise((res) => setTimeout(res, 4000));
+          const w = await watchState(page);
+          const q = await readQueue(browser);
+          assert(w !== null, '감시 상태가 없다 — 모듈이 붙지 않았다');
+          assert(w.inQueue === false, `큐에 없는데 inQueue가 ${w.inQueue}`);
+          assert(w.hooked === false, `큐에 없는데 훅을 걸었다`);
+          assert(!q.items.some((i) => i.videoNo === A.videoNo), '큐에 몰래 추가됐다');
+          assert(q.items.length === 1, `큐 길이가 변했다: ${q.items.length}`);
+          const card = await page.evaluate(
+            () => !!document.getElementById('chzzk-addons-upnext'));
+          assert(!card, '다음 항목 카드가 떴다');
+          return { watch: w, queueLength: q.items.length, cardShown: card };
+        }
+      );
+      assert(r.ok, `재생 준비 실패: ${JSON.stringify(r.tries)}`);
+      return { ...r.result, tries: r.tries.length };
     }
   }
 ];
