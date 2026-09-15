@@ -126,8 +126,19 @@ async function route() {
   await attachFor(detectPageType(path));
 }
 
-// 치지직은 SPA다. pushState/replaceState를 감싸야 내부 이동을 감지할 수 있다.
-// 원래 함수를 보존해 호출하고 우리 훅은 그 뒤에 얹는다.
+// 치지직은 SPA다. 내부 이동에서는 content script가 재실행되지 않으므로
+// URL 변화를 우리가 직접 알아내야 한다.
+//
+// pushState/replaceState를 감싸는 것만으로는 부족하다. 치지직 번들은 우리
+// content script(document_idle)보다 먼저 로드되면서 history.pushState의
+// 원본 참조를 붙잡아 두기 때문에, 우리가 나중에 프로퍼티를 덮어써도
+// 그쪽 호출은 래퍼를 지나가지 않는다. 실측으로 SPA 이동 시 라우팅 감지가
+// 되지 않는 것을 확인했다.
+//
+// 그래서 폴링을 대비책으로 둔다. 300ms에 pathname 하나를 비교하는 비용은
+// 무시할 수 있고, 어떤 라우터를 쓰든 놓치지 않는다.
+const ROUTE_POLL_MS = 300;
+
 function installRouteHooks() {
   for (const name of ['pushState', 'replaceState']) {
     const original = history[name];
@@ -138,6 +149,9 @@ function installRouteHooks() {
     };
   }
   window.addEventListener('popstate', route);
+  setInterval(() => {
+    if (location.pathname !== lastPath) route();
+  }, ROUTE_POLL_MS);
 }
 
 export async function start() {
