@@ -1,5 +1,6 @@
-import { detectPageType, parseChannelId } from './route.js';
+import { detectPageType, parseChannelId, parseVideoNo } from './route.js';
 import { attachVideosPage } from './videos-page.js';
+import { attachWatchPage } from './watch-page.js';
 import { createStore } from '../common/store.js';
 import { mountPanel } from '../panel/panel.js';
 import {
@@ -103,7 +104,17 @@ async function attachFor(pageType) {
       });
     }
   }
-  // 영상 페이지 모듈은 T9에서 붙인다.
+  if (pageType === 'watch') {
+    const videoNo = parseVideoNo(location.pathname);
+    if (videoNo !== null) {
+      detachCurrent = attachWatchPage({
+        videoNo,
+        getQueue: () => queue,
+        commit,
+        setStatus
+      });
+    }
+  }
 
   publishDebugState(pageType);
 }
