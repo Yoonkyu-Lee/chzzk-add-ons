@@ -11,6 +11,7 @@
 설계의 근거와 세부는 전부 스펙에 있다. 작업 시작 전 반드시 읽는다:
 
 - `docs/superpowers/specs/2026-09-15-replay-playlist-design.md` — 설계 문서 (권위 있는 출처)
+- `docs/superpowers/plans/2026-09-15-replay-playlist.md` — 구현 계획. 항목별 코드와 단계
 - `docs/mockups/playlist-mockup.html` — UI 목업. 화면 구성의 기준
 - `docs/progress.md` — 진행 기록. **매 작업 단위마다 갱신한다**
 
