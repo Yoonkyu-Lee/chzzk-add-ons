@@ -9,9 +9,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { resolveChrome, extensionArgs } from './chrome-path.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const PROFILE = resolve(HERE, '.profile');
 const OUT = resolve(HERE, 'out');
 
@@ -22,19 +22,27 @@ const EXT = resolve(HERE, extArg);
 const CHANNEL = '0f9a3b4fbb0e7137d1f0b4d70563031c';
 const VIDEO_NO = '14689850';
 
-// MV3 확장은 구형 headless에서 로드되지 않는다. headful로 고정한다.
+// 설치된 정식판은 커맨드라인 확장 로드를 차단한다 (스펙 4.4절).
+// Chrome for Testing + headful 조합만 동작한다.
 async function launch() {
+  const chrome = resolveChrome();
+  console.log(`브라우저: ${chrome.kind}`);
   return puppeteer.launch({
-    executablePath: CHROME,
+    executablePath: chrome.path,
     userDataDir: PROFILE,
     headless: false,
-    args: [
-      `--disable-extensions-except=${EXT}`,
-      `--load-extension=${EXT}`,
-      '--no-first-run',
-      '--no-default-browser-check'
-    ]
+    args: extensionArgs(EXT)
   });
+}
+
+// 확장 상태는 DOM 속성으로 읽는다. isolated world라 window는 보이지 않는다.
+async function readAddonsState(page, attr) {
+  return page
+    .evaluate((a) => {
+      const raw = document.documentElement.getAttribute(a);
+      return raw ? JSON.parse(raw) : null;
+    }, attr)
+    .catch(() => null);
 }
 
 async function main() {
@@ -59,11 +67,18 @@ async function main() {
     });
     await new Promise((r) => setTimeout(r, 2500));
     result.smokeInjected = await page
-      .evaluate(() => window.__CHZZK_SMOKE__ === 'ok')
+      .evaluate(() => document.documentElement.getAttribute('data-chzzk-smoke') === 'ok')
       .catch(() => false);
-    result.addonsState = await page
-      .evaluate(() => window.__chzzkAddons ?? null)
-      .catch(() => null);
+    result.addonsState = await readAddonsState(page, 'data-chzzk-addons');
+    result.panelHostPresent = await page
+      .evaluate(() => !!document.getElementById('chzzk-addons-panel-host'))
+      .catch(() => false);
+    result.toolbarPresent = await page
+      .evaluate(() => !!document.getElementById('chzzk-addons-toolbar'))
+      .catch(() => false);
+    result.addButtonCount = await page
+      .evaluate(() => document.querySelectorAll('.chzzk-addons-add').length)
+      .catch(() => 0);
 
     // (2) 목록 페이지 구조 — videoNo를 담은 링크를 역추적해 카드 경계를 찾는다
     result.videosPage = await page.evaluate(() => {
@@ -133,9 +148,8 @@ async function main() {
         ancestorChain: chain
       };
     });
-    result.addonsWatchState = await page
-      .evaluate(() => window.__chzzkAddonsWatch ?? null)
-      .catch(() => null);
+    result.watchPageType = await readAddonsState(page, 'data-chzzk-addons');
+    result.addonsWatchState = await readAddonsState(page, 'data-chzzk-addons-watch');
 
     await page.screenshot({ path: resolve(OUT, 'recon-watch.png') });
     writeFileSync(resolve(OUT, 'recon.log'), logs.join('\n'), 'utf8');
