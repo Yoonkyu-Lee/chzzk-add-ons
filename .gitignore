@@ -18,6 +18,11 @@ Thumbs.db
 # 통과 기록은 docs/progress.md의 검증 표에 SHA와 함께 남는다.
 tools/out/
 tools/.profile/
+tools/.profile-headless/
+tools/.probe-profile/
+
+# Chrome for Testing 바이너리. npm run setup:browser 로 내려받는다.
+tools/.browser/
 
 # Logs & env
 *.log

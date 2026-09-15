@@ -82,15 +82,62 @@ GET https://api.chzzk.naver.com/service/v1/channels/{channelId}/videos
   플레이어의 `video.duration`을 기준으로 한다.** API 값은 표시·합산용으로만 쓴다.
 - `readyState: 4`.
 
-### 4.3 아직 확인하지 못한 것
+`tools/recon.js`로 추가 확인 (2026-09-15):
 
-구현 초기에 puppeteer 하니스로 직접 확인하고 결과를 이 문서에 추가한다.
+- **`currentTime` 쓰기로 seek이 된다.** 1.483 → 62.292 (+60 요청). 4.3-1 해결.
+- 플레이어는 네이버 prismplayer다. `<video>`의 조상 사슬:
+  `.webplayer-internal-source-wrapper`(relative) → `.webplayer-internal-source-shadow`(relative)
+  → `.webplayer-internal-core-source-container`(static) → `.webplayer-internal-core-shadow`(relative)
+  → `.pzp-pc__video`(absolute) → **`.pzp`(relative, 플레이어 루트)**.
+  이 클래스들은 해시가 없어 안정적이다. 다음 항목 카드는 `.pzp`를 앵커로 얹는다.
+- 목록 페이지에 `iframe`이 3개 있다 (정식판 Chrome 기준). 단 `<video>`는
+  메인 프레임에서 `querySelector`로 잡히므로 frame 분기는 필요 없다.
 
-1. `video.currentTime` 쓰기로 실제 seek이 되는지 (MSE라 되는 것이 정상이나 미확인).
-2. 다시보기 목록 페이지의 카드 컨테이너·카드 엘리먼트 셀렉터.
-3. SPA 내부 이동 시 `history.pushState` 사용 여부와 URL 변화 시점.
-4. 치지직 자체 자동재생이 개입하는 타이밍.
-5. 로그인·구독자 전용·성인 인증 영상이 큐에 섞였을 때의 동작.
+### 4.3 목록 페이지 DOM 구조 (2026-09-15 확인)
+
+카드 사슬: `a._thumbnail_*` → `div._container_*` → **`li._item_*`** → `ul._list_*`
+→ `div._panel_*` → `div._area_*` → `section._section_*`
+
+- **클래스명에 해시가 붙는다** (`_thumbnail_1xtdq_10`). 배포마다 바뀌므로 셀렉터로 쓰지 않는다.
+- 기준점은 `a[href*="/video/"]`. 실측 36개 링크 / 카드 18개 — **카드당 링크가 2개**다
+  (썸네일과 제목). 중복 처리를 막아야 한다.
+- 카드 경계는 `closest('li')`로 잡힌다 (`closestLi: true` 확인). `article`은 없다.
+- 목록 컨테이너는 카드의 `parentElement`(`ul._list_*`). 툴바는 그 앞에 꽂는다.
+
+확정 셀렉터:
+
+| 상수 | 값 |
+|---|---|
+| `CARD_LINK` | `a[href*="/video/"]` |
+| 카드 경계 | `link.closest('li')` |
+| 목록 컨테이너 | `card.parentElement` |
+| 플레이어 앵커 | `.pzp`, 없으면 `<video>`의 첫 non-static 조상 |
+
+### 4.4 검증 환경 (2026-09-15 확인)
+
+`tools/probe-ext.js`와 `tools/probe-storage.js`로 확인한 제약이다.
+하니스 설계를 좌우하므로 스펙에 남긴다.
+
+- **설치된 Chrome 정식판(152)은 커맨드라인 확장 로드를 차단한다.**
+  `--load-extension`, `--disable-features=DisableLoadExtensionCommandLineSwitch`,
+  `--enable-unsafe-extension-debugging`, `ignoreDefaultArgs: ['--disable-extensions']`를
+  5가지 조합으로 시도했으나 모두 실패했다.
+  → **Chrome for Testing을 쓴다.** `npm run setup:browser`로 내려받고
+  `tools/chrome-path.js`가 경로를 해석한다. 153에서 로드 성공을 확인했다.
+- **content script는 isolated world에서 돈다.** 거기서 `window`에 심은 값은
+  `page.evaluate`(main world)에 보이지 않는다 (`viaWindow: false` 확인).
+  → 디버깅 창구는 `document.documentElement`의 **data 속성**으로 둔다. DOM은 공유된다.
+- **main world에는 `chrome.storage`가 없다.** 하니스가 큐를 읽고 쓰려면
+  확장의 **service worker 타깃**에 붙어야 한다.
+  `target.worker()` → `worker.evaluate()`로 읽기·쓰기 왕복을 확인했다.
+  service worker는 유휴 시 죽으므로 `browser.waitForTarget`으로 재확보한다.
+  예비 경로로 `chrome-extension://<id>/manifest.json` 페이지에서의 접근도 동작한다.
+
+### 4.5 아직 확인하지 못한 것
+
+1. 치지직 자체 자동재생이 개입하는 타이밍.
+2. 로그인·구독자 전용·성인 인증 영상이 큐에 섞였을 때의 동작.
+3. SPA 내부 이동이 `history.pushState`를 쓰는지 (T6 구현 중 확인).
 
 ## 5. 아키텍처
 

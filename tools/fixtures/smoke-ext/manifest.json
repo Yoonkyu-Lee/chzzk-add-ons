@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "smoke",
+  "version": "0.0.1",
+  "permissions": ["storage"],
+  "background": { "service_worker": "sw.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://chzzk.naver.com/*", "https://example.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

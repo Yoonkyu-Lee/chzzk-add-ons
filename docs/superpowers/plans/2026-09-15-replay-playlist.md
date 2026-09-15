@@ -25,6 +25,9 @@
 - **작업 브랜치는 `feat/replay-playlist`.** `main`에 직접 커밋하지 않는다.
 - **커밋 요약에 항목 ID를 넣는다** (`feat: T3 다음 항목 계산`). 작업 단위 완료 커밋에 `docs/progress.md` 갱신을 포함한다.
 - **사용자의 Chrome을 이름 기준으로 종료하지 않는다.** `tools/.profile/` 경로로 식별한 프로세스만 정리한다.
+- **하니스는 Chrome for Testing으로만 돈다.** 설치된 정식판(152)은 커맨드라인 확장 로드를 차단한다 (스펙 4.4절). 경로는 `tools/chrome-path.js`가 해석한다.
+- **디버깅 창구는 `document.documentElement`의 data 속성이다.** content script는 isolated world에서 돌아 `window`에 심은 값이 `page.evaluate`에 보이지 않는다. `window.__chzzkAddons*`를 쓰지 않는다.
+- **하니스는 `chrome.storage`를 service worker 타깃에서 읽고 쓴다.** main world에는 `chrome.storage`가 없다.
 - **테스트 채널**: 오킹TV `0f9a3b4fbb0e7137d1f0b4d70563031c` (다시보기 65개 / 9페이지). **테스트 영상**: `14689850`.
 
 ---
@@ -1528,7 +1531,7 @@ git commit -m "feat: T5 저장소 접근 계층
 **Interfaces:**
 - Consumes: Task 5의 `createStore`
 - Produces:
-  - `boot.js`는 전역을 남기지 않는다. 대신 `window.__chzzkAddons = {pageType, version}`를 디버깅용으로 노출한다 (하니스가 이 값을 읽어 주입을 판정한다)
+  - `publishDebugState({pageType, queueLength})` — `document.documentElement`에 `data-chzzk-addons`(JSON)를 쓴다. **`window`에 쓰지 않는다** — isolated world라 하니스에 보이지 않는다 (스펙 4.4절)
   - `detectPageType(pathname) => 'videos' | 'watch' | 'other'`
   - `parseVideoNo(pathname) => number | null`
   - `parseChannelId(pathname) => string | null`
@@ -1680,9 +1683,13 @@ import { detectPageType } from './route.js';
 const VERSION = '0.1.0';
 
 // 하니스가 주입 성공과 현재 페이지 타입을 읽는 창구다.
-// 기능에는 쓰지 않는다 - 검증 전용이라는 뜻으로 이름에 밑줄을 둘렀다.
+// window가 아니라 DOM에 쓴다 - content script는 isolated world에서 돌아서
+// window에 심은 값이 page.evaluate(main world)에 보이지 않는다 (스펙 4.4절).
 function publishDebugState(pageType) {
-  window.__chzzkAddons = { pageType, version: VERSION };
+  document.documentElement.setAttribute(
+    'data-chzzk-addons',
+    JSON.stringify({ pageType, version: VERSION })
+  );
 }
 
 let detachCurrent = null;
@@ -2055,8 +2062,11 @@ let detachCurrent = null;
 let lastPath = null;
 
 function publishDebugState(pageType) {
-  // 하니스가 주입·상태를 읽는 창구. 기능에는 쓰지 않는다.
-  window.__chzzkAddons = { pageType, version: VERSION, queueLength: queue.items.length };
+  // 하니스가 주입·상태를 읽는 창구. DOM에 쓴다 - isolated world라
+  // window에 심으면 page.evaluate에 보이지 않는다 (스펙 4.4절).
+  document.documentElement.setAttribute('data-chzzk-addons', JSON.stringify({
+    pageType, version: VERSION, queueLength: queue.items.length
+  }));
 }
 
 function setStatus(message, tone = 'info') {
@@ -2445,7 +2455,7 @@ git commit -m "feat: T8 목록 페이지 툴바와 담기 버튼
 - Produces:
   - `attachWatchPage({videoNo, getQueue, commit, setStatus}) => detach`
   - `waitForVideo(timeoutMs) => Promise<HTMLVideoElement|null>`
-  - 디버깅 창구: `window.__chzzkAddonsWatch = {videoNo, inQueue, hooked}`
+  - 디버깅 창구: `document.documentElement`의 `data-chzzk-addons-watch`(JSON) = `{videoNo, inQueue, hooked}`. **`window`에 쓰지 않는다** (스펙 4.4절)
 
 - [ ] **Step 1: 구현**
 
@@ -2484,7 +2494,13 @@ export function attachWatchPage({ videoNo, getQueue, commit, setStatus }) {
   let disposed = false;
   const cleanups = [];
 
-  window.__chzzkAddonsWatch = { videoNo, inQueue: false, hooked: false };
+  // 하니스가 읽는 창구. DOM에 쓴다 - isolated world라 window는 안 보인다.
+  const watchState = { videoNo, inQueue: false, hooked: false };
+  function publishWatchState(patch = {}) {
+    Object.assign(watchState, patch);
+    document.documentElement.setAttribute('data-chzzk-addons-watch', JSON.stringify(watchState));
+  }
+  publishWatchState();
 
   function inQueue() {
     return getQueue().items.some((i) => i.videoNo === videoNo);
@@ -2519,10 +2535,10 @@ export function attachWatchPage({ videoNo, getQueue, commit, setStatus }) {
   (async () => {
     // 큐에 없는 영상이면 아무것도 하지 않는다. 일반 시청을 방해하지 않는다.
     if (!inQueue()) {
-      window.__chzzkAddonsWatch = { videoNo, inQueue: false, hooked: false };
+      publishWatchState({ inQueue: false, hooked: false });
       return;
     }
-    window.__chzzkAddonsWatch.inQueue = true;
+    publishWatchState({ inQueue: true });
     await commit(setCurrentByVideoNo(getQueue(), videoNo));
 
     video = await waitForVideo();
@@ -2530,7 +2546,7 @@ export function attachWatchPage({ videoNo, getQueue, commit, setStatus }) {
       setStatus('플레이어를 찾지 못해 자동 넘김을 쓸 수 없습니다. 재생목록은 그대로 쓸 수 있습니다.', 'error');
       return;
     }
-    window.__chzzkAddonsWatch.hooked = true;
+    publishWatchState({ hooked: true });
 
     // MSE 스트리밍이라 loadedmetadata 전에는 currentTime 쓰기가 무시된다.
     if (video.readyState >= 1) restorePosition();
@@ -2805,8 +2821,20 @@ advancing 플래그로 중복 이동을 막는다. timeupdate와 ended가 함께
 - Delete: `tools/fixtures/smoke-ext/`
 
 **Interfaces:**
-- Consumes: 지금까지의 모든 DOM id — `chzzk-addons-toolbar`, `chzzk-addons-panel-host`, `chzzk-addons-upnext`, `window.__chzzkAddons`, `window.__chzzkAddonsWatch`
+- Consumes: 지금까지의 모든 DOM id — `chzzk-addons-toolbar`, `chzzk-addons-panel-host`, `chzzk-addons-upnext`, 그리고 `documentElement`의 `data-chzzk-addons` / `data-chzzk-addons-watch`
 - Produces: `tools/out/result.json` — `[{scenario, name, passed, ms, error, screenshot}]`
+
+> **주의 — 아래 시나리오 본문은 T0 발견 이후 고쳐 써야 한다.**
+> 원래 계획은 `page.evaluate(() => chrome.storage...)`와
+> `page.waitForFunction(async () => chrome.storage...)`로 큐를 읽었다.
+> **main world에는 `chrome.storage`가 없어 전부 동작하지 않는다** (스펙 4.4절).
+> 고칠 점 세 가지:
+> 1. `readQueue`/`writeQueue`/`setPanelOpen`은 `page`가 아니라 `browser`를 받는다 (위 헬퍼).
+> 2. 큐 변화를 기다릴 때 `page.waitForFunction` 대신 `readQueue(browser)`를
+>    폴링하는 헬퍼(`waitFor(fn, ms)`)를 쓴다.
+> 3. `window.__chzzkAddons*` 확인은 `debugState(page)` / `watchState(page)`로 바꾼다.
+>
+> 아래 본문의 DOM 셀렉터·판정 조건·타임아웃은 그대로 유효하다.
 
 - [ ] **Step 1: 하니스를 쓴다**
 
@@ -2820,9 +2848,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 
+import { resolveChrome, extensionArgs } from './chrome-path.js';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const PROFILE = resolve(HERE, '.profile');
 const OUT = resolve(HERE, 'out');
 
@@ -2835,32 +2864,56 @@ const TOTAL_TIMEOUT_MS = 10 * 60 * 1000;
 const args = process.argv.slice(2);
 const only = args.includes('--scenario') ? Number(args[args.indexOf('--scenario') + 1]) : null;
 
-// MV3 확장은 headful에서만 확실히 로드된다. Task 0에서 확인한 사실이다.
+// 설치된 정식판은 커맨드라인 확장 로드를 차단한다 (스펙 4.4절).
+// Chrome for Testing + headful 조합만 동작한다. T0에서 확인했다.
 async function launch() {
+  const chrome = resolveChrome();
+  console.log(`브라우저: ${chrome.kind}`);
   return puppeteer.launch({
-    executablePath: CHROME,
+    executablePath: chrome.path,
     userDataDir: PROFILE,
     headless: false,
-    args: [
-      `--disable-extensions-except=${ROOT}`,
-      `--load-extension=${ROOT}`,
-      '--no-first-run',
-      '--no-default-browser-check'
-    ]
+    args: extensionArgs(ROOT)
   });
 }
 
-// storage.local을 확장 컨텍스트에서 읽고 쓴다.
-// 페이지에서 chrome.storage에 접근할 수 있는 것은 content script뿐이므로
-// evaluate 안에서 chrome.storage를 직접 부른다.
-async function readQueue(page) {
-  return page.evaluate(async () => (await chrome.storage.local.get('queue')).queue ?? null);
+// main world에는 chrome.storage가 없고, content script의 isolated world에는
+// puppeteer가 들어갈 수 없다. 그래서 확장의 service worker 타깃에서 읽고 쓴다.
+// service worker는 유휴 시 죽으므로 매번 다시 확보한다 (스펙 4.4절).
+async function sw(browser) {
+  const match = (t) => t.type() === 'service_worker' && t.url().startsWith('chrome-extension://');
+  const target = (await browser.targets()).find(match)
+    ?? await browser.waitForTarget(match, { timeout: 15000 });
+  const worker = await target.worker();
+  if (!worker) throw new Error('service worker 핸들을 얻지 못했다');
+  return worker;
 }
-async function writeQueue(page, queue) {
-  await page.evaluate(async (q) => chrome.storage.local.set({ queue: q }), queue);
+
+async function readQueue(browser) {
+  const w = await sw(browser);
+  return w.evaluate(async () => (await chrome.storage.local.get('queue')).queue ?? null);
 }
-async function setPanelOpen(page, open) {
-  await page.evaluate(async (o) => chrome.storage.local.set({ ui: { panelOpen: o } }), open);
+async function writeQueue(browser, queue) {
+  const w = await sw(browser);
+  await w.evaluate(async (q) => chrome.storage.local.set({ queue: q }), queue);
+}
+async function setPanelOpen(browser, open) {
+  const w = await sw(browser);
+  await w.evaluate(async (o) => chrome.storage.local.set({ ui: { panelOpen: o } }), open);
+}
+
+// 페이지에서 확장 상태를 읽는다. DOM 속성이므로 main world에서 보인다.
+async function debugState(page) {
+  return page.evaluate(() => {
+    const raw = document.documentElement.getAttribute('data-chzzk-addons');
+    return raw ? JSON.parse(raw) : null;
+  });
+}
+async function watchState(page) {
+  return page.evaluate(() => {
+    const raw = document.documentElement.getAttribute('data-chzzk-addons-watch');
+    return raw ? JSON.parse(raw) : null;
+  });
 }
 
 function seededQueue(items) {
