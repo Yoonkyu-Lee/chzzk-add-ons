@@ -70,7 +70,7 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | ID | 항목 | 상태 | 커밋 | 시도한 접근 |
 |----|------|------|------|-------------|
 | T0 | 하니스 스모크 테스트 + 치지직 DOM 정찰 | `[x]` | | 정식판 Chrome 실패 → Chrome for Testing 성공 |
-| T1 | `format.js` 시간·날짜 포맷 | `[ ]` | | |
+| T1 | `format.js` 시간·날짜 포맷 | `[x]` | | 테스트 9개 통과 |
 | T2 | `queue.js` 담기·오래된 순 정렬 | `[ ]` | | |
 | T3 | `queue.js` 순서 변경·삭제·다음 항목 | `[ ]` | | |
 | T4 | `chzzk-api.js` 호출·정규화 | `[ ]` | | |
@@ -143,6 +143,7 @@ main world에 `chrome.storage`가 없으므로 계획 원안의
 | Claude-in-Chrome 도구 | `chzzk.naver.com` **차단됨**. 재시도 금물, 하니스 사용 | 2026-09-15 |
 | 하니스 프로필 경로 | `tools/.profile/` (gitignore) — **이 경로로만 프로세스 식별** | — |
 | PowerShell 특이점 | `git push` 등이 stderr로 출력해 `NativeCommandError`처럼 보임. 실패가 아님 | 2026-09-15 |
+| PowerShell 특이점 2 | here-string 안의 큰따옴표가 네이티브 인자 전달에서 깨진다. **커밋 메시지에 `"`를 쓰지 말 것.** 필요하면 파일에 쓰고 `git commit -F` | 2026-09-15 |
 | **하니스 브라우저** | **Chrome for Testing 153.0.8010.36.** 정식판 152는 확장 로드 차단. `npm run setup:browser` / `tools/chrome-path.js` | 2026-09-15 |
 | content script world | **isolated.** `window`에 심은 값은 `page.evaluate`에 안 보임. 창구는 `documentElement`의 data 속성 | 2026-09-15 |
 | 하니스 storage 경로 | main world에 `chrome.storage` 없음 → **service worker 타깃**에서 evaluate. 유휴 시 죽으므로 매번 재확보 | 2026-09-15 |
