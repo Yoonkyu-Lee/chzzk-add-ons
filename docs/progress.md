@@ -11,7 +11,7 @@
 
 > 항상 한 줄. 재개하는 세션이 가장 먼저 읽는 줄이다.
 
-T0 착수 대기. 구현 계획은 `docs/superpowers/plans/2026-09-15-replay-playlist.md`에 완성됨.
+T0 완료. T1 (`format.js`) 착수 대기.
 
 ## 조사 중인 문제
 
@@ -20,6 +20,44 @@ T0 착수 대기. 구현 계획은 `docs/superpowers/plans/2026-09-15-replay-pla
 > 알게 된 사실은 스펙이나 아래 "환경 사실"로 옮긴다.
 
 없음
+
+### 해결된 문제 기록
+
+#### P1 — puppeteer가 MV3 확장을 로드하지 못한다 → **해결 (2026-09-15)**
+
+원인이 **두 개**였다. 둘 다 고쳐야 통과했다.
+
+**원인 A: 설치된 Chrome 정식판(152)이 커맨드라인 확장 로드를 차단한다.**
+
+| # | 접근 | 정식판 152 | Chrome for Testing 153 |
+|---|------|-----------|------------------------|
+| 1 | `--disable-extensions-except` + `--load-extension` | 실패 | **성공** |
+| 2 | 1 + `ignoreDefaultArgs: ['--disable-extensions']` | 실패 | — |
+| 3 | 1 + `--disable-features=DisableLoadExtensionCommandLineSwitch` | 실패 | — |
+| 4 | 2 + 3 동시 | 실패 | — |
+| 5 | 4 + `--enable-unsafe-extension-debugging` | 실패 | — |
+
+→ **Chrome for Testing을 쓴다.** `npm run setup:browser`로 내려받고
+`tools/chrome-path.js`가 경로를 해석한다. 플래그 우회는 더 시도하지 않는다.
+
+**원인 B: 판정 방법이 틀렸다.**
+
+content script는 **isolated world**에서 돈다. 거기서 `window.__CHZZK_SMOKE__`에
+심은 값은 `page.evaluate`(main world)에 보이지 않는다. 실측 `viaWindow: false`,
+`viaDom: true`, `viaConsole: true`.
+
+또한 background script가 없는 확장은 `chrome-extension:` 타깃을 만들지 않는다.
+그래서 "타깃 0개"는 로드 실패의 증거가 아니었다. 이 오판이 원인 A를
+과대평가하게 만들었다.
+
+→ 판정과 디버깅 창구는 **`documentElement`의 data 속성**으로 한다. DOM은 공유된다.
+
+**파생 결론: 하니스의 storage 접근 경로**
+
+main world에 `chrome.storage`가 없으므로 계획 원안의
+`page.evaluate(() => chrome.storage...)`는 전부 동작하지 않는다.
+확장의 **service worker 타깃**에서 읽고 쓴다. `tools/probe-storage.js`로
+왕복 확인 완료 (`{hello:'world', n:42}` 복원, `extPageStorageOk: true`).
 
 ---
 
@@ -31,7 +69,7 @@ T0 착수 대기. 구현 계획은 `docs/superpowers/plans/2026-09-15-replay-pla
 
 | ID | 항목 | 상태 | 커밋 | 시도한 접근 |
 |----|------|------|------|-------------|
-| T0 | 하니스 스모크 테스트 + 치지직 DOM 정찰 | `[ ]` | | |
+| T0 | 하니스 스모크 테스트 + 치지직 DOM 정찰 | `[x]` | | 정식판 Chrome 실패 → Chrome for Testing 성공 |
 | T1 | `format.js` 시간·날짜 포맷 | `[ ]` | | |
 | T2 | `queue.js` 담기·오래된 순 정렬 | `[ ]` | | |
 | T3 | `queue.js` 순서 변경·삭제·다음 항목 | `[ ]` | | |
@@ -105,6 +143,15 @@ T0 착수 대기. 구현 계획은 `docs/superpowers/plans/2026-09-15-replay-pla
 | Claude-in-Chrome 도구 | `chzzk.naver.com` **차단됨**. 재시도 금물, 하니스 사용 | 2026-09-15 |
 | 하니스 프로필 경로 | `tools/.profile/` (gitignore) — **이 경로로만 프로세스 식별** | — |
 | PowerShell 특이점 | `git push` 등이 stderr로 출력해 `NativeCommandError`처럼 보임. 실패가 아님 | 2026-09-15 |
+| **하니스 브라우저** | **Chrome for Testing 153.0.8010.36.** 정식판 152는 확장 로드 차단. `npm run setup:browser` / `tools/chrome-path.js` | 2026-09-15 |
+| content script world | **isolated.** `window`에 심은 값은 `page.evaluate`에 안 보임. 창구는 `documentElement`의 data 속성 | 2026-09-15 |
+| 하니스 storage 경로 | main world에 `chrome.storage` 없음 → **service worker 타깃**에서 evaluate. 유휴 시 죽으므로 매번 재확보 | 2026-09-15 |
+| `CARD_LINK` | `a[href*="/video/"]` — 카드당 **2개**(썸네일+제목), 중복 처리 주의 | 2026-09-15 |
+| 카드 경계 | `link.closest('li')` (`li._item_*`). `article` 없음 | 2026-09-15 |
+| 목록 컨테이너 | 카드의 `parentElement` (`ul._list_*`). 툴바는 그 앞에 꽂음 | 2026-09-15 |
+| 플레이어 앵커 | `.pzp` (prismplayer 루트, relative). `<video>` 바로 위는 `.webplayer-internal-source-wrapper` | 2026-09-15 |
+| 클래스명 | **해시 포함** (`_thumbnail_1xtdq_10`) → 셀렉터로 쓰지 말 것 | 2026-09-15 |
+| seek | `currentTime` 쓰기 동작 확인 (1.483 → 62.292) | 2026-09-15 |
 
 ---
 

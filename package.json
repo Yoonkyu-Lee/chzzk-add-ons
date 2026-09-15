@@ -1,0 +1,17 @@
+{
+  "name": "chzzk-add-ons",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "치지직 다시보기 재생목록 크롬 확장",
+  "scripts": {
+    "test": "node --test test/",
+    "harness": "node tools/harness.js",
+    "recon": "node tools/recon.js",
+    "setup:browser": "puppeteer-browsers install chrome@stable --path tools/.browser"
+  },
+  "devDependencies": {
+    "@puppeteer/browsers": "^3.2.2",
+    "puppeteer-core": "^24.0.0"
+  }
+}

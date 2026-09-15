@@ -114,13 +114,36 @@ naver.com이 민감 도메인으로 기본 차단되어 있다. 2026-09-15 확�
 
 ### tools/harness.js
 
-`puppeteer-core`가 **설치된 Chrome**을 띄운다 (Chromium 다운로드 없음).
-전용 프로필에 확장을 `--load-extension`으로 올리고 chzzk를 직접 방문한다.
+`puppeteer-core`가 **Chrome for Testing**을 띄운다. 전용 프로필에 확장을
+`--load-extension`으로 올리고 chzzk를 직접 방문한다.
 Claude-in-Chrome의 도메인 제한과 무관한 경로다.
 
+**설치된 Chrome 정식판(152)은 쓸 수 없다.** 커맨드라인 확장 로드를 정책으로
+차단한다. `--disable-features=DisableLoadExtensionCommandLineSwitch`,
+`--enable-unsafe-extension-debugging`, `ignoreDefaultArgs: ['--disable-extensions']`를
+5가지 조합으로 시도해 전부 실패했다 (2026-09-15). **다시 시도하지 말 것.**
+
+```bash
+npm run setup:browser   # tools/.browser/ 에 Chrome for Testing 설치
 ```
-C:\Program Files\Google\Chrome\Application\chrome.exe
-```
+
+경로 해석은 `tools/chrome-path.js`의 `resolveChrome()`이 한다.
+
+### 두 가지 world 함정 — 반드시 기억할 것
+
+1. **content script는 isolated world에서 돈다.** 거기서 `window`에 심은 값은
+   `page.evaluate`(main world)에 **보이지 않는다.** 그래서 확장이 하니스에
+   알리는 창구는 `document.documentElement`의 data 속성이다:
+   `data-chzzk-addons`, `data-chzzk-addons-watch`. DOM은 두 world가 공유한다.
+2. **main world에는 `chrome.storage`가 없다.** 하니스가 큐를 읽고 쓰려면
+   확장의 **service worker 타깃**에 붙어야 한다.
+   ```js
+   const t = await browser.waitForTarget(
+     (t) => t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'));
+   const w = await t.worker();
+   await w.evaluate(async () => (await chrome.storage.local.get('queue')).queue);
+   ```
+   service worker는 유휴 시 죽으므로 **매번 다시 확보한다.**
 
 하니스가 하는 일:
 
