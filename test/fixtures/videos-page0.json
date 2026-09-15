@@ -1,0 +1,38 @@
+{
+  "code": 200,
+  "message": null,
+  "content": {
+    "page": 0,
+    "size": 2,
+    "totalCount": 5,
+    "totalPages": 3,
+    "data": [
+      {
+        "videoNo": 15175460,
+        "videoId": "600AE005E9D9CE62B80D6B9438F8028AAF5E",
+        "videoTitle": "등갈비",
+        "videoType": "REPLAY",
+        "publishDate": "2026-09-13 15:31:22",
+        "thumbnailImageUrl": "https://livecloud-thumb.akamaized.net/a.jpg",
+        "duration": 4507,
+        "readCount": 381,
+        "channel": {
+          "channelId": "0f9a3b4fbb0e7137d1f0b4d70563031c",
+          "channelName": "오킹TV"
+        }
+      },
+      {
+        "videoNo": 15174856,
+        "videoTitle": "등갈비",
+        "videoType": "REPLAY",
+        "publishDate": "2026-09-13 14:15:57",
+        "thumbnailImageUrl": "https://livecloud-thumb.akamaized.net/b.jpg",
+        "duration": 3443,
+        "channel": {
+          "channelId": "0f9a3b4fbb0e7137d1f0b4d70563031c",
+          "channelName": "오킹TV"
+        }
+      }
+    ]
+  }
+}
